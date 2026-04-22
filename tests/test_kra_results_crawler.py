@@ -88,6 +88,52 @@ DETAIL_HTML_FIXTURE = """
 </table>
 """
 
+DETAIL_HTML_WITH_ODDS_LINK = """
+<html>
+<body>
+<a href="/raceScore/oddsExample.do?meet=1&realRcDate=20260419&realRcNo=1">배당률 더보기</a>
+<table>
+<caption>배당률의 정보를 제공하는 표</caption>
+<tbody>
+<tr>
+    <th rowspan="1">배당률</th>
+    <td class="textLeft">단승식: ② 11.5 </td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
+"""
+
+ODDS_PAGE_FIXTURE = """
+<table>
+<caption>배당률의 정보를 제공하는 표</caption>
+<tbody>
+<tr>
+    <th rowspan="1">배당률</th>
+    <td class="textLeft">연승식: ② 2.7 ⑥ 1.1 ① 1.5 </td>
+</tr>
+</tbody>
+</table>
+"""
+
+ODDS_PAGE_ALL_HORSES_STYLE = """
+<div class="oddsWrap">
+  <h4>단승식</h4>
+  <table>
+    <tr><td>①</td><td>3.1</td></tr>
+    <tr><td>②</td><td>4.8</td></tr>
+    <tr><td>③</td><td>12.0</td></tr>
+  </table>
+  <h4>연승식</h4>
+  <table>
+    <tr><td>①</td><td>1.5</td></tr>
+    <tr><td>②</td><td>1.8</td></tr>
+    <tr><td>③</td><td>3.3</td></tr>
+  </table>
+</div>
+"""
+
 
 class TestKraCrawlerParsing(unittest.TestCase):
     def test_extract_race_keys_from_daily(self):
@@ -124,6 +170,34 @@ class TestKraCrawlerParsing(unittest.TestCase):
         self.assertEqual(len(payouts), 11)
         self.assertTrue(any(p.bet_type == "삼쌍승식" and p.odds == "139.7" for p in payouts))
         self.assertTrue(any(p.bet_type == "복연승식" and p.combination == "⑥①" for p in payouts))
+
+    def test_parse_payouts_collects_from_odds_link(self):
+        meta = {"race_date": "2026-04-19", "meet": "서울", "race_no": "1"}
+
+        def fake_fetch(url: str) -> str:
+            if "oddsExample.do" in url:
+                return ODDS_PAGE_FIXTURE
+            raise AssertionError(f"unexpected url: {url}")
+
+        payouts = parse_payouts(DETAIL_HTML_WITH_ODDS_LINK, meta, fetcher=fake_fetch)
+        self.assertTrue(any(p.bet_type == "단승식" and p.combination == "②" for p in payouts))
+        self.assertTrue(any(p.bet_type == "연승식" and p.combination == "①" and p.odds == "1.5" for p in payouts))
+
+    def test_parse_payouts_collects_all_horses_when_odds_page_has_split_sections(self):
+        meta = {"race_date": "2026-04-19", "meet": "서울", "race_no": "1"}
+
+        def fake_fetch(url: str) -> str:
+            if "oddsExample.do" in url:
+                return ODDS_PAGE_ALL_HORSES_STYLE
+            raise AssertionError(f"unexpected url: {url}")
+
+        payouts = parse_payouts(DETAIL_HTML_WITH_ODDS_LINK, meta, fetcher=fake_fetch)
+        win = [p for p in payouts if p.bet_type == "단승식"]
+        place = [p for p in payouts if p.bet_type == "연승식"]
+        self.assertTrue(any(p.combination == "①" and p.odds == "3.1" for p in win))
+        self.assertTrue(any(p.combination == "②" and p.odds == "4.8" for p in win))
+        self.assertTrue(any(p.combination == "③" and p.odds == "12.0" for p in win))
+        self.assertTrue(any(p.combination == "③" and p.odds == "3.3" for p in place))
 
 
 if __name__ == "__main__":
