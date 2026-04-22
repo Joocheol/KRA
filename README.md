@@ -67,6 +67,50 @@
 4. 체크포인트(마지막 성공 날짜/경주) 기록
 5. 실패 요청 자동 재시도 + 지수 백오프
 
+## 실제 요청 URL 정리
+
+현재 스크립트(`scripts/kra_bulk_collect.py`, `scripts/kra_results_crawler.py`)가 실제로 호출하는 URL은 아래와 같습니다.
+
+### 1) 일자별 경주 목록
+- 용도: 해당 날짜/경마장(서울/부산경남/제주)의 경주 키(`meet`, `realRcDate`, `realRcNo`) 수집
+- 템플릿:
+
+```text
+https://race.kra.co.kr/raceScore/ScoretableDetailList.do?meet={meet_code}&realRcDate={yyyymmdd}
+```
+
+- 예시(서울, 2026-04-19):
+
+```text
+https://race.kra.co.kr/raceScore/ScoretableDetailList.do?meet=1&realRcDate=20260419
+```
+
+### 2) 경주 상세(성적 + 기본 배당)
+- 용도: 경주 메타/말별 성적 + 상세 페이지 내 배당률 표 파싱
+- 템플릿:
+
+```text
+https://race.kra.co.kr/raceScore/ScoretableDetail.do?meet={meet_code}&realRcDate={yyyymmdd}&realRcNo={race_no}
+```
+
+- 예시(서울, 2026-04-19, 1경주):
+
+```text
+https://race.kra.co.kr/raceScore/ScoretableDetail.do?meet=1&realRcDate=20260419&realRcNo=1
+```
+
+### 3) 배당률 상세(추가 배당 페이지)
+- 용도: 상세 페이지에서 `배당` 링크(또는 `odds` 문자열 포함 href)를 발견했을 때 추가 호출
+- 특징: URL 패턴은 고정 1개가 아니라, 상세 페이지에 포함된 링크를 **동적으로 추출**
+- 대표 예시(테스트 fixture 기준):
+
+```text
+https://race.kra.co.kr/raceScore/oddsExample.do?meet=1&realRcDate=20260419&realRcNo=1
+```
+
+> 즉, “각 배당률(단승/연승/복승/쌍승/복연승/삼복/삼쌍) URL”이 베팅식별로 분리된 것이 아니라,
+> 기본적으로 `ScoretableDetail.do` + (필요 시) 추가 배당 링크 URL에서 함께 파싱합니다.
+
 ## 운영 팁
 - `User-Agent` 명시
 - 요청 간 딜레이(예: 0.7~1.5초 랜덤)
